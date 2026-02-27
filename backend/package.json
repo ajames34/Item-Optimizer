@@ -1,0 +1,33 @@
+{
+  "name": "inventory-optimizer-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Resale inventory tracker — Node.js/Express API with SQLite",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:prod": "NODE_ENV=production node src/index.js",
+    "dev": "node --watch src/index.js",
+    "build": "echo 'Backend has no build step — Node.js runs source directly'"
+  },
+  "keywords": [
+    "resale",
+    "inventory",
+    "express",
+    "sqlite"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@clerk/express": "^1.7.75",
+    "better-sqlite3": "^12.6.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "pg": "^8.19.0"
+  }
+}
