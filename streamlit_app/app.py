@@ -46,8 +46,8 @@ st.markdown("""
     }
     
     /* Clean Top Header */
-    header {visibility: hidden;}
     #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
