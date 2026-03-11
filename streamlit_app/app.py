@@ -4,7 +4,7 @@ from datetime import date
 import database
 
 # Configure the Streamlit page layout
-st.set_page_config(page_title="Inventory Optimizer", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Inventory Optimizer", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
@@ -51,14 +51,73 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📦 Inventory Optimizer")
-st.markdown("Easily track your sneaker & streetwear inventory, calculate platform fees, and analyze true net profit.")
+st.logo("logo.png")
+
+# Initialize database on startup
+try:
+    database.init_db()
+except Exception as e:
+    pass
+
+# Session State Initialization
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+# ----------------------------------------------------------------------------
+# Authentication Flow
+# ----------------------------------------------------------------------------
+if not st.session_state.username:
+    st.image("logo.png", width=120)
+    st.title("Inventory Optimizer")
+    st.markdown("Secure platform to track your sneaker & streetwear inventory and calculate true net profit.")
+    
+    colL, colR, _ = st.columns([1, 1, 1])
+    with colL:
+        with st.form("login_form"):
+            st.subheader("Login")
+            login_user = st.text_input("Username")
+            login_pass = st.text_input("Password", type="password")
+            if st.form_submit_button("Login"):
+                if database.authenticate_user(login_user, login_pass):
+                    st.session_state.username = login_user
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+    with colR:
+        with st.form("signup_form"):
+            st.subheader("Sign Up")
+            signup_user = st.text_input("New Username")
+            signup_pass = st.text_input("New Password", type="password")
+            if st.form_submit_button("Sign Up"):
+                if signup_user and signup_pass:
+                    if database.create_user(signup_user, signup_pass):
+                        st.success("Account created securely! Please log in on the left.")
+                    else:
+                        st.error("Username already exists.")
+                else:
+                    st.error("Please fill out both fields.")
+    st.stop()
+
+# ----------------------------------------------------------------------------
+# Main Authenticated App
+# ----------------------------------------------------------------------------
+user_id = st.session_state.username
+
+colTitle, colLogout = st.columns([10, 1])
+with colTitle:
+    st.title("Inventory Optimizer")
+with colLogout:
+    if st.button("Logout"):
+        st.session_state.username = None
+        st.rerun()
+
+st.markdown(f"**Welcome back, {user_id}!** Easily track your inventory and analyze true net profit.")
 
 # ----------------------------------------------------------------------------
 # Data Fetching
 # ----------------------------------------------------------------------------
-inv_df = database.get_inventory_df()
-sales_df = database.get_sales_df()
+inv_df = database.get_inventory_df(user_id)
+sales_df = database.get_sales_df(user_id)
 
 active_inv = inv_df[inv_df["Status"] == "In Stock"]
 
@@ -87,10 +146,10 @@ col3.metric("Total Items Sold", f"{total_sold}")
 st.markdown("---")
 
 # ----------------------------------------------------------------------------
-# Sidebar: Add New Item Form
+# Dialog Modals
 # ----------------------------------------------------------------------------
-st.sidebar.header("➕ Add New Item")
-with st.sidebar.form("add_item_form"):
+@st.dialog("➕ Add New Item")
+def add_item_dialog(user_id):
     name = st.text_input("Item Name (e.g., Jordan 4 White Cement)")
     brand = st.selectbox("Brand", ["Nike", "New Balance", "Adidas", "Amiri", "Supreme", "Chrome Hearts", "Other"])
     size = st.text_input("Size (e.g., 10, M)")
@@ -98,13 +157,59 @@ with st.sidebar.form("add_item_form"):
     purchase_price = st.number_input("Purchase Price ($)", min_value=0.0, format="%.2f", step=10.0)
     date_acquired = st.date_input("Date Acquired", date.today())
     
-    if st.form_submit_button("Add to Inventory"):
+    if st.button("Add to Inventory", type="primary", use_container_width=True):
         if name and size:
-            database.add_item(name, brand, size, condition, purchase_price, date_acquired.isoformat())
+            database.add_item(user_id, name, brand, size, condition, purchase_price, date_acquired.isoformat())
             st.toast(f"{name} added successfully!", icon="✅")
             st.rerun()
         else:
-            st.sidebar.error("Please fill out Name and Size.")
+            st.error("Please fill out Name and Size.")
+
+@st.dialog("💰 Record Sale")
+def mark_sold_dialog(user_id, active_inv):
+    item_options = active_inv.apply(lambda row: f"{row['id']} - {row['Item Name']} (Size {row['Size']})", axis=1).tolist()
+    selected_item = st.selectbox("Select Item to Sell", item_options)
+    platforms = [
+        "StockX", "GOAT / Alias", "eBay (Sneakers >$150)", "eBay (Standard)", 
+        "Grailed", "Poshmark", "Depop", "Flight Club", "Stadium Goods", 
+        "Mercari", "Vinted", "Local/Cash (No Fee)"
+    ]
+    platform = st.selectbox("Platform Sold On", platforms)
+    sale_price = st.number_input("Final Gross Sale Price ($)", min_value=0.0, format="%.2f", step=10.0)
+    shipping_cost = st.number_input("Shipping Label Cost ($)", min_value=0.0, format="%.2f", step=1.0)
+    
+    if st.button("Submit Sale", type="primary", use_container_width=True):
+        if sale_price > 0:
+            item_id = int(selected_item.split(" - ")[0])
+            try:
+                database.mark_as_sold(user_id, item_id, platform, sale_price, shipping_cost)
+                st.balloons()
+                st.toast(f"Sale recorded on {platform}!", icon="🎉")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error recording sale: {e}")
+        else:
+            st.error("Sale price must be greater than $0.")
+
+# ----------------------------------------------------------------------------
+# Sidebar Control & Paywall
+# ----------------------------------------------------------------------------
+is_pro = database.is_pro_user(user_id)
+active_count = len(active_inv)
+
+st.sidebar.header("Inventory Management")
+
+if is_pro or active_count < 25:
+    if st.sidebar.button("➕ Add New Item", use_container_width=True):
+        add_item_dialog(user_id)
+else:
+    st.sidebar.warning("🔒 You have reached the 25 active item limit on the free plan.")
+    # Example Stripe link (You would replace this with actual Stripe Payment Link)
+    st.sidebar.markdown("[🚀 Upgrade to Pro ($9.99/mo)](https://buy.stripe.com/test_123456789) to track unlimited items!")
+
+if not is_pro:
+    st.sidebar.markdown("---")
+    st.sidebar.metric("Free Plan Limit", f"{active_count} / 25")
 
 # ----------------------------------------------------------------------------
 # Main Content: Tabs
@@ -116,35 +221,9 @@ with tab1:
     st.dataframe(active_inv, use_container_width=True, hide_index=True)
     
     if not active_inv.empty:
-        st.markdown("### Mark Item as Sold")
-        with st.form("mark_sold_form"):
-            colA, colB = st.columns(2)
-            with colA:
-                # Format a clean dropdown list (e.g., "15 - Jordan 4 (10)")
-                item_options = active_inv.apply(lambda row: f"{row['id']} - {row['Item Name']} (Size {row['Size']})", axis=1).tolist()
-                selected_item = st.selectbox("Select Item to Sell", item_options)
-                platforms = [
-                    "StockX", "GOAT / Alias", "eBay (Sneakers >$150)", "eBay (Standard)", 
-                    "Grailed", "Poshmark", "Depop", "Flight Club", "Stadium Goods", 
-                    "Mercari", "Vinted", "Local/Cash (No Fee)"
-                ]
-                platform = st.selectbox("Platform Sold On", platforms)
-            with colB:
-                sale_price = st.number_input("Final Gross Sale Price ($)", min_value=0.0, format="%.2f", step=10.0)
-                shipping_cost = st.number_input("Shipping Label Cost ($)", min_value=0.0, format="%.2f", step=1.0)
-            
-            if st.form_submit_button("Submit Sale"):
-                if sale_price > 0:
-                    item_id = int(selected_item.split(" - ")[0])
-                    try:
-                        database.mark_as_sold(item_id, platform, sale_price, shipping_cost)
-                        st.balloons()
-                        st.toast(f"Sale recorded on {platform}!", icon="🎉")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error recording sale: {e}")
-                else:
-                    st.error("Sale price must be greater than $0.")
+        st.markdown("---")
+        if st.button("💰 Record a Sale"):
+            mark_sold_dialog(user_id, active_inv)
     else:
         st.info("Your active inventory is empty. Add your first item using the sidebar on the left!")
 

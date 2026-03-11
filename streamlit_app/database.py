@@ -1,6 +1,7 @@
 import os
 import psycopg2
 import pandas as pd
+import bcrypt
 from dotenv import load_dotenv
 from datetime import date
 
@@ -8,13 +9,64 @@ from datetime import date
 load_dotenv()
 
 DB_URL = os.getenv("DATABASE_URL")
-# Bypass Clerk Auth: Use a default unified user ID for the Python prototype
-USER_ID = "streamlit_unified_user"
+
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_pro BOOLEAN DEFAULT FALSE
+        )
+    """)
+    # Migration for existing users table
+    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE;")
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def is_pro_user(username):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_pro FROM users WHERE username = %s", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row[0] if (row and row[0] is not None) else False
+
+def create_user(username, password):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, hashed))
+        conn.commit()
+        return True
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def authenticate_user(username, password):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if row:
+        return bcrypt.checkpw(password.encode('utf-8'), row[0].encode('utf-8'))
+    return False
 
 def get_connection():
     return psycopg2.connect(DB_URL)
 
-def get_inventory_df():
+def get_inventory_df(user_id):
     """Retrieve all inventory belonging to this user as a Pandas DataFrame."""
     conn = get_connection()
     query = """
@@ -26,11 +78,11 @@ def get_inventory_df():
         WHERE user_id = %s 
         ORDER BY created_at DESC
     """
-    df = pd.read_sql(query, conn, params=(USER_ID,))
+    df = pd.read_sql(query, conn, params=(user_id,))
     conn.close()
     return df
 
-def get_sales_df():
+def get_sales_df(user_id):
     """Retrieve all sales belonging to this user as a Pandas DataFrame."""
     conn = get_connection()
     query = """
@@ -43,11 +95,11 @@ def get_sales_df():
         WHERE s.user_id = %s
         ORDER BY s.date_sold DESC, s.created_at DESC
     """
-    df = pd.read_sql(query, conn, params=(USER_ID,))
+    df = pd.read_sql(query, conn, params=(user_id,))
     conn.close()
     return df
 
-def add_item(name, brand, size, condition, purchase_price, date_acquired):
+def add_item(user_id, name, brand, size, condition, purchase_price, date_acquired):
     """Insert a new item into the inventory table."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -55,7 +107,7 @@ def add_item(name, brand, size, condition, purchase_price, date_acquired):
         """INSERT INTO inventory 
            (user_id, item_name, brand, size, condition, purchase_price, date_acquired) 
            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-        (USER_ID, name, brand, size, condition, purchase_price, date_acquired)
+        (user_id, name, brand, size, condition, purchase_price, date_acquired)
     )
     conn.commit()
     cursor.close()
@@ -99,13 +151,13 @@ def calculate_fee(platform, sale_price):
         return 0.0
     return 0.0
 
-def mark_as_sold(inventory_id, platform, sale_price, shipping_cost):
+def mark_as_sold(user_id, inventory_id, platform, sale_price, shipping_cost):
     """Calculate fees, record the sale, and update the inventory status atomically."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         # Fetch the original purchase price
-        cursor.execute("SELECT purchase_price, status FROM inventory WHERE id = %s AND user_id = %s", (inventory_id, USER_ID))
+        cursor.execute("SELECT purchase_price, status FROM inventory WHERE id = %s AND user_id = %s", (inventory_id, user_id))
         row = cursor.fetchone()
         if not row:
             raise Exception("Item not found. It may belong to another user.")
@@ -128,7 +180,7 @@ def mark_as_sold(inventory_id, platform, sale_price, shipping_cost):
             """INSERT INTO sales 
                (user_id, inventory_id, sale_price, platform, platform_fee, shipping_cost, net_profit, date_sold) 
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (USER_ID, inventory_id, sale_price, platform, fee, shipping_cost, net_profit, date_sold)
+            (user_id, inventory_id, sale_price, platform, fee, shipping_cost, net_profit, date_sold)
         )
         
         # Update Inventory
