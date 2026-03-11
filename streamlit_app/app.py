@@ -123,7 +123,12 @@ with tab1:
                 # Format a clean dropdown list (e.g., "15 - Jordan 4 (10)")
                 item_options = active_inv.apply(lambda row: f"{row['id']} - {row['Item Name']} (Size {row['Size']})", axis=1).tolist()
                 selected_item = st.selectbox("Select Item to Sell", item_options)
-                platform = st.selectbox("Platform Sold On", ["StockX", "eBay", "Poshmark", "Depop"])
+                platforms = [
+                    "StockX", "GOAT / Alias", "eBay (Sneakers >$150)", "eBay (Standard)", 
+                    "Grailed", "Poshmark", "Depop", "Flight Club", "Stadium Goods", 
+                    "Mercari", "Vinted", "Local/Cash (No Fee)"
+                ]
+                platform = st.selectbox("Platform Sold On", platforms)
             with colB:
                 sale_price = st.number_input("Final Gross Sale Price ($)", min_value=0.0, format="%.2f", step=10.0)
                 shipping_cost = st.number_input("Shipping Label Cost ($)", min_value=0.0, format="%.2f", step=1.0)

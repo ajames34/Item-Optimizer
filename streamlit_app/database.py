@@ -65,13 +65,38 @@ def calculate_fee(platform, sale_price):
     """Calculate the exact platform fee based on our business logic engine."""
     sp = float(sale_price)
     if platform == 'StockX':
+        # 9% transaction fee + 3% payment proc
         return round(sp * 0.09 + sp * 0.03, 2)
-    elif platform == 'eBay':
+    elif platform == 'GOAT / Alias':
+        # 9.5% commission + $5 base seller fee + 2.9% cash out fee
+        return round((sp * 0.095 + 5.0) + (sp * 0.029), 2)
+    elif platform == 'eBay (Sneakers >$150)':
+        # 8% total fee for sneakers over $150 (no payment fee)
+        return round(sp * 0.08, 2)
+    elif platform == 'eBay (Standard)':
+        # 13.25% + $0.30 standard fee
         return round(sp * 0.1325 + 0.30, 2)
+    elif platform == 'Grailed':
+        # 9% commission + 3.49% + $0.49 PayPal payment processing
+        return round(sp * 0.09 + (sp * 0.0349 + 0.49), 2)
     elif platform == 'Poshmark':
-        return round(sp * 0.20, 2)
+        # 20% flat fee (>=$15), $2.95 flat (<$15)
+        if sp >= 15:
+            return round(sp * 0.20, 2)
+        else:
+            return 2.95
     elif platform == 'Depop':
+        # 10% selling fee + 2.9% + $0.30 payment processing
         return round(sp * 0.10 + sp * 0.029 + 0.30, 2)
+    elif platform == 'Flight Club':
+        # 9.5% commission + $5 seller fee (Standard)
+        return round(sp * 0.095 + 5.0, 2)
+    elif platform == 'Stadium Goods':
+        # 20% commission fee
+        return round(sp * 0.20, 2)
+    elif platform in ['Mercari', 'Vinted', 'Local/Cash (No Fee)']:
+        # Currently 0% seller fees
+        return 0.0
     return 0.0
 
 def mark_as_sold(inventory_id, platform, sale_price, shipping_cost):
