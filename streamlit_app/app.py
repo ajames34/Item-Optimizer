@@ -5,7 +5,7 @@ import uuid
 import database
 
 # Configure the Streamlit page layout
-st.set_page_config(page_title="Inventory Optimizer", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Resell Optimizer", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
@@ -106,7 +106,7 @@ def auth_dialog():
 # ----------------------------------------------------------------------------
 colTitle, colLogout = st.columns([10, 2])
 with colTitle:
-    st.title("Inventory Optimizer")
+    st.title("📈 Resell Optimizer")
 with colLogout:
     if st.session_state.username:
         if st.button("Logout"):
@@ -230,34 +230,48 @@ def import_csv_dialog(user_id):
 # ----------------------------------------------------------------------------
 # Sidebar Control & Paywall
 # ----------------------------------------------------------------------------
-is_pro = database.is_pro_user(user_id)
+user_tier = database.get_user_tier(user_id)
 active_count = len(active_inv)
+
+# Determine Limits
+if user_tier == 'Pro':
+    limit = float('inf')
+    limit_str = 'Unlimited'
+elif user_tier == 'Basic':
+    limit = 100
+    limit_str = '100'
+else:
+    limit = 25
+    limit_str = '25'
 
 st.sidebar.header("Inventory Management")
 
-if is_pro or active_count < 25:
+if active_count < limit:
     if st.sidebar.button("➕ Add New Item", use_container_width=True):
         add_item_dialog(user_id)
     if st.sidebar.button("📥 Bulk Import CSV", use_container_width=True):
         import_csv_dialog(user_id)
 else:
     if not st.session_state.username:
-        st.sidebar.warning("🔒 You've hit the 25 item Guest Limit!")
-        st.sidebar.markdown("Sign up for a free account to permanently save your data, and unlock access to Stripe Pro checkout!")
+        st.sidebar.warning(f"🔒 You've hit the {limit_str} item Guest Limit!")
+        st.sidebar.markdown("Sign up for a free account to permanently save your data, and unlock access to Stripe upgrades!")
         if st.sidebar.button("🔐 Sign Up to continue", use_container_width=True, type="primary"):
             auth_dialog()
-    else:
-        st.sidebar.warning("🔒 You have reached the 25 active item limit on the free plan.")
-        # Example Stripe link (You would replace this with actual Stripe Payment Link)
-        st.sidebar.markdown("[🚀 Upgrade to Pro ($9.99/mo)](https://buy.stripe.com/test_123456789) to track unlimited items!")
+    elif user_tier == 'Free':
+        st.sidebar.warning(f"🔒 You have reached the {limit_str} active item limit on the Free plan.")
+        st.sidebar.markdown("[🚀 Upgrade to Basic ($15/mo)](https://buy.stripe.com/test_123456789) for 100 items.")
+        st.sidebar.markdown("[⚡️ Upgrade to Pro ($35/mo)](https://buy.stripe.com/test_987654321) for Unlimited + AI Features.")
+    elif user_tier == 'Basic':
+        st.sidebar.warning(f"🔒 You have reached the {limit_str} active item limit on the Basic plan.")
+        st.sidebar.markdown("[⚡️ Upgrade to Pro ($35/mo)](https://buy.stripe.com/test_987654321) for Unlimited + AI Features.")
 
 st.sidebar.markdown("---")
-st.sidebar.metric("Active Items Count", f"{active_count} / {25 if not is_pro else 'Unlimited'}")
+st.sidebar.metric(f"{user_tier} Plan Limit", f"{active_count} / {limit_str}")
 
 # ----------------------------------------------------------------------------
 # Main Content: Tabs
 # ----------------------------------------------------------------------------
-tab1, tab2 = st.tabs(["📋 Active Inventory", "💰 Completed Sales"])
+tab1, tab2, tab3 = st.tabs(["📋 Active Inventory", "💰 Completed Sales", "🔍 Margin Analyzer"])
 
 with tab1:
     st.subheader("Active Inventory")
@@ -288,3 +302,52 @@ with tab2:
         )
     else:
         st.info("No completed sales yet. Sell an item from the Active Inventory tab!")
+
+with tab3:
+    st.subheader("Margin Analyzer Engine")
+    st.markdown("Instantly compare potential profit across all platforms before you list an item.")
+    
+    colA, colB, colC = st.columns(3)
+    with colA:
+        analyze_buy = st.number_input("Target Buy Cost ($)", min_value=0.0, format="%.2f", step=10.0, value=150.0)
+    with colB:
+        analyze_sell = st.number_input("Target Sell Price ($)", min_value=0.0, format="%.2f", step=10.0, value=250.0)
+    with colC:
+        analyze_ship = st.number_input("Estimated Shipping ($)", min_value=0.0, format="%.2f", step=1.0, value=0.0)
+        
+    st.markdown("---")
+    
+    # Run the engine across all supported platforms
+    platforms = [
+        "StockX", "GOAT / Alias", "eBay (Sneakers >$150)", "eBay (Standard)", 
+        "Grailed", "Poshmark", "Depop", "Flight Club", "Stadium Goods", 
+        "Mercari", "Vinted"
+    ]
+    
+    results = []
+    for p in platforms:
+        fee = database.calculate_fee(p, analyze_sell)
+        net = analyze_sell - analyze_buy - fee - analyze_ship
+        margin = (net / analyze_buy) * 100 if analyze_buy > 0 else 0
+        results.append({
+            "Platform": p,
+            "Total Fees": fee,
+            "Net Profit": net,
+            "ROI (%)": f"{margin:.1f}%"
+        })
+        
+    res_df = pd.DataFrame(results)
+    res_df = res_df.sort_values("Net Profit", ascending=False)
+    
+    # Display the engine results
+    colChart, colTable = st.columns([1, 1])
+    with colChart:
+        st.bar_chart(data=res_df, x="Platform", y="Net Profit", color="#a855f7")
+    with colTable:
+        def color_net(val):
+            return f'color: {"#22c55e" if float(val) > 0 else "#ef4444"}; font-weight: bold'
+        st.dataframe(
+            res_df.style.map(color_net, subset=['Net Profit']), 
+            use_container_width=True, 
+            hide_index=True
+        )

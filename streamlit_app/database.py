@@ -19,23 +19,24 @@ def init_db():
             username VARCHAR(50) UNIQUE NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_pro BOOLEAN DEFAULT FALSE
+            subscription_tier VARCHAR(20) DEFAULT 'Free'
         )
     """)
     # Migration for existing users table
-    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE;")
+    cursor.execute("ALTER TABLE users DROP COLUMN IF EXISTS is_pro;")
+    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(20) DEFAULT 'Free';")
     conn.commit()
     cursor.close()
     conn.close()
 
-def is_pro_user(username):
+def get_user_tier(username):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT is_pro FROM users WHERE username = %s", (username,))
+    cursor.execute("SELECT subscription_tier FROM users WHERE username = %s", (username,))
     row = cursor.fetchone()
     cursor.close()
     conn.close()
-    return row[0] if (row and row[0] is not None) else False
+    return row[0] if (row and row[0] is not None) else 'Free'
 
 def create_user(username, password):
     conn = get_connection()
