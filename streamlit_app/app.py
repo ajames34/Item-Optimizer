@@ -191,6 +191,34 @@ def mark_sold_dialog(user_id, active_inv):
         else:
             st.error("Sale price must be greater than $0.")
 
+@st.dialog("📥 Bulk Import (CSV)")
+def import_csv_dialog(user_id):
+    st.markdown("Upload your StockX, eBay, or personal spreadsheet to instantly populate your inventory.")
+    st.markdown("*(Expected columns: Item Name, Brand, Size, Condition, Purchase Price, Date Acquired)*")
+    uploaded_file = st.file_uploader("Choose a .csv file", type="csv")
+    
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.success(f"File uploaded! Found {len(df)} rows.")
+            
+            if st.button("Confirm & Import Data", type="primary", use_container_width=True):
+                success_count = 0
+                for _, row in df.iterrows():
+                    name = str(row.get("Item Name", row.get("Name", "Unknown Item")))
+                    brand = str(row.get("Brand", "Other"))
+                    size = str(row.get("Size", "N/A"))
+                    condition = str(row.get("Condition", "New"))
+                    price = float(row.get("Purchase Price", row.get("Price", 0.0)))
+                    date_acq = str(row.get("Date Acquired", date.today().isoformat()))
+                    database.add_item(user_id, name, brand, size, condition, price, date_acq)
+                    success_count += 1
+                    
+                st.toast(f"Successfully imported {success_count} items!", icon="✅")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error processing file. Please check your columns. Details: {e}")
+
 # ----------------------------------------------------------------------------
 # Sidebar Control & Paywall
 # ----------------------------------------------------------------------------
@@ -202,6 +230,8 @@ st.sidebar.header("Inventory Management")
 if is_pro or active_count < 25:
     if st.sidebar.button("➕ Add New Item", use_container_width=True):
         add_item_dialog(user_id)
+    if st.sidebar.button("📥 Bulk Import CSV", use_container_width=True):
+        import_csv_dialog(user_id)
 else:
     st.sidebar.warning("🔒 You have reached the 25 active item limit on the free plan.")
     # Example Stripe link (You would replace this with actual Stripe Payment Link)
