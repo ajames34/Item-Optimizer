@@ -63,6 +63,16 @@ def authenticate_user(username, password):
         return bcrypt.checkpw(password.encode('utf-8'), row[0].encode('utf-8'))
     return False
 
+def migrate_guest_data(guest_id, new_username):
+    """Transfer transient guest inventory/sales data to newly created permanent account."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE inventory SET user_id = %s WHERE user_id = %s", (new_username, guest_id))
+    cursor.execute("UPDATE sales SET user_id = %s WHERE user_id = %s", (new_username, guest_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 def get_connection():
     return psycopg2.connect(DB_URL)
 

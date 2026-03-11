@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+import uuid
 import database
 
 # Configure the Streamlit page layout
@@ -63,55 +64,62 @@ except Exception as e:
 if "username" not in st.session_state:
     st.session_state.username = None
 
+if "guest_id" not in st.session_state:
+    st.session_state.guest_id = f"guest_{uuid.uuid4().hex[:8]}"
+
+# Determine active user identity (Registered User OR Anonymous Guest)
+user_id = st.session_state.username if st.session_state.username else st.session_state.guest_id
+
 # ----------------------------------------------------------------------------
-# Authentication Flow
+# Authentication Flow (Dialog)
 # ----------------------------------------------------------------------------
-if not st.session_state.username:
-    st.image("logo.png", width=120)
-    st.title("Inventory Optimizer")
-    st.markdown("Secure platform to track your sneaker & streetwear inventory and calculate true net profit.")
-    
-    colL, colR, _ = st.columns([1, 1, 1])
-    with colL:
-        with st.form("login_form"):
-            st.subheader("Login")
-            login_user = st.text_input("Username")
-            login_pass = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                if database.authenticate_user(login_user, login_pass):
-                    st.session_state.username = login_user
+@st.dialog("🔐 Sign In / Create Account")
+def auth_dialog():
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    with tab1:
+        login_user = st.text_input("Username")
+        login_pass = st.text_input("Password", type="password")
+        if st.button("Login", use_container_width=True):
+            if database.authenticate_user(login_user, login_pass):
+                st.session_state.username = login_user
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+    with tab2:
+        signup_user = st.text_input("New Username")
+        signup_pass = st.text_input("New Password", type="password")
+        if st.button("Sign Up & Save Data", use_container_width=True):
+            if signup_user and signup_pass:
+                if database.create_user(signup_user, signup_pass):
+                    # Migrate guest data to new user so they don't lose their tracking!
+                    database.migrate_guest_data(st.session_state.guest_id, signup_user)
+                    st.session_state.username = signup_user
+                    st.success("Account created! Data migrated securely. Please close this box.")
                     st.rerun()
                 else:
-                    st.error("Invalid username or password.")
-    with colR:
-        with st.form("signup_form"):
-            st.subheader("Sign Up")
-            signup_user = st.text_input("New Username")
-            signup_pass = st.text_input("New Password", type="password")
-            if st.form_submit_button("Sign Up"):
-                if signup_user and signup_pass:
-                    if database.create_user(signup_user, signup_pass):
-                        st.success("Account created securely! Please log in on the left.")
-                    else:
-                        st.error("Username already exists.")
-                else:
-                    st.error("Please fill out both fields.")
-    st.stop()
+                    st.error("Username already exists.")
+            else:
+                st.error("Please fill out both fields.")
 
 # ----------------------------------------------------------------------------
 # Main Authenticated App
 # ----------------------------------------------------------------------------
-user_id = st.session_state.username
-
-colTitle, colLogout = st.columns([10, 1])
+colTitle, colLogout = st.columns([10, 2])
 with colTitle:
     st.title("Inventory Optimizer")
 with colLogout:
-    if st.button("Logout"):
-        st.session_state.username = None
-        st.rerun()
+    if st.session_state.username:
+        if st.button("Logout"):
+            st.session_state.username = None
+            st.rerun()
+    else:
+        if st.button("Sign Up / Login", type="primary"):
+            auth_dialog()
 
-st.markdown(f"**Welcome back, {user_id}!** Easily track your inventory and analyze true net profit.")
+if st.session_state.username:
+    st.markdown(f"**Welcome back, {user_id}!** Easily track your inventory and analyze true net profit.")
+else:
+    st.markdown("**Welcome to Guest Mode!** You can track up to 25 items for free without creating an account!")
 
 # ----------------------------------------------------------------------------
 # Data Fetching
@@ -233,13 +241,18 @@ if is_pro or active_count < 25:
     if st.sidebar.button("📥 Bulk Import CSV", use_container_width=True):
         import_csv_dialog(user_id)
 else:
-    st.sidebar.warning("🔒 You have reached the 25 active item limit on the free plan.")
-    # Example Stripe link (You would replace this with actual Stripe Payment Link)
-    st.sidebar.markdown("[🚀 Upgrade to Pro ($9.99/mo)](https://buy.stripe.com/test_123456789) to track unlimited items!")
+    if not st.session_state.username:
+        st.sidebar.warning("🔒 You've hit the 25 item Guest Limit!")
+        st.sidebar.markdown("Sign up for a free account to permanently save your data, and unlock access to Stripe Pro checkout!")
+        if st.sidebar.button("🔐 Sign Up to continue", use_container_width=True, type="primary"):
+            auth_dialog()
+    else:
+        st.sidebar.warning("🔒 You have reached the 25 active item limit on the free plan.")
+        # Example Stripe link (You would replace this with actual Stripe Payment Link)
+        st.sidebar.markdown("[🚀 Upgrade to Pro ($9.99/mo)](https://buy.stripe.com/test_123456789) to track unlimited items!")
 
-if not is_pro:
-    st.sidebar.markdown("---")
-    st.sidebar.metric("Free Plan Limit", f"{active_count} / 25")
+st.sidebar.markdown("---")
+st.sidebar.metric("Active Items Count", f"{active_count} / {25 if not is_pro else 'Unlimited'}")
 
 # ----------------------------------------------------------------------------
 # Main Content: Tabs
