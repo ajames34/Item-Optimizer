@@ -6,6 +6,51 @@ import database
 # Configure the Streamlit page layout
 st.set_page_config(page_title="Inventory Optimizer", page_icon="📦", layout="wide")
 
+st.markdown("""
+<style>
+    /* Metric Cards Glassmorphism */
+    [data-testid="stMetricValue"] {
+        font-size: 2.2rem !important;
+        font-weight: 800 !important;
+        background: -webkit-linear-gradient(45deg, #6366f1, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    [data-testid="stMetric"] {
+        background: rgba(30, 31, 46, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Premium Dataframes */
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Glow Hover Buttons */
+    .stButton>button {
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+        border: 1px solid rgba(99, 102, 241, 0.3) !important;
+    }
+    .stButton>button:hover {
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.4) !important;
+        transform: translateY(-1px) !important;
+        border-color: #6366f1 !important;
+    }
+    
+    /* Clean Top Header */
+    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📦 Inventory Optimizer")
 st.markdown("Easily track your sneaker & streetwear inventory, calculate platform fees, and analyze true net profit.")
 
