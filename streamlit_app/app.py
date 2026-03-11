@@ -13,41 +13,55 @@ st.set_page_config(page_title="Resell Optimizer", page_icon="📈", layout="wide
 
 st.markdown("""
 <style>
-    /* Metric Cards Glassmorphism */
+    /* Metric Cards - Clean SaaS */
     [data-testid="stMetricValue"] {
         font-size: 2.2rem !important;
         font-weight: 800 !important;
-        background: -webkit-linear-gradient(45deg, #6366f1, #a855f7);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #0f172a !important; /* Dark Slate for numbers */
+    }
+    [data-testid="stMetricLabel"] {
+        color: #64748b !important; /* Cool gray for labels */
+        font-weight: 600 !important;
     }
     [data-testid="stMetric"] {
-        background: rgba(30, 31, 46, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 12px;
         padding: 1.5rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     }
     
-    /* Premium Dataframes */
+    /* Clean Dataframes */
     [data-testid="stDataFrame"] {
         border-radius: 10px;
         overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
     }
     
-    /* Glow Hover Buttons */
+    /* Professional Blue Buttons (Like Stripe/Shopify) */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 600 !important;
         transition: all 0.2s ease !important;
-        border: 1px solid rgba(99, 102, 241, 0.3) !important;
+        border: 1px solid #2563eb !important;
+        background-color: #ffffff;
+        color: #2563eb !important;
     }
     .stButton>button:hover {
-        box-shadow: 0 0 15px rgba(99, 102, 241, 0.4) !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
         transform: translateY(-1px) !important;
-        border-color: #6366f1 !important;
+        background-color: #f8fafc !important;
+    }
+    
+    /* Primary Action Buttons */
+    button[kind="primary"] {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #1d4ed8 !important;
+        color: #ffffff !important;
     }
     
     /* Clean Top Header */
