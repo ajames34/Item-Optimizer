@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import uuid
+import os
+from dotenv import load_dotenv
 import database
+
+load_dotenv()
 
 # Configure the Streamlit page layout
 st.set_page_config(page_title="Resell Optimizer", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
@@ -53,6 +57,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.logo("logo.png")
+
+# Attempt to configure Gemini AI
+try:
+    import google.generativeai as genai
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key and api_key != 'your_api_key_here':
+        genai.configure(api_key=api_key)
+        has_ai = True
+    else:
+        has_ai = False
+except ImportError:
+    has_ai = False
 
 # Initialize database on startup
 try:
@@ -227,6 +243,37 @@ def import_csv_dialog(user_id):
         except Exception as e:
             st.error(f"Error processing file. Please check your columns. Details: {e}")
 
+@st.dialog("✨ AI SEO Listing Generator")
+def ai_listing_dialog(active_inv):
+    if not has_ai:
+        st.error("AI Generation is currently unavailable. Please provide your Gemini API key in the bottom corner.")
+        return
+        
+    item_options = active_inv.apply(lambda row: f"{row['id']} - {row['Item Name']} (Size {row['Size']})", axis=1).tolist()
+    selected_item = st.selectbox("Select Item to Generate Listing For", item_options)
+    
+    if st.button("Generate Description", type="primary", use_container_width=True):
+        item_id = int(selected_item.split(" - ")[0])
+        row = active_inv[active_inv['id'] == item_id].iloc[0]
+        
+        item_name = row['Item Name']
+        brand = row['Brand']
+        size = row['Size']
+        condition = row['Condition']
+        
+        generating = st.empty()
+        generating.info("Generating your SEO-optimized title and description... Please wait.")
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            prompt = f"Act as an expert reseller on eBay and Poshmark. Write a highly SEO-optimized product title and a compelling, detailed product description for the following item:\nItem Name: {item_name}\nBrand: {brand}\nSize: {size}\nCondition: {condition}\nFormat the output with two headers: 'Optimized Title' and 'Product Description'. Keep the title under 80 characters."
+            response = model.generate_content(prompt)
+            generating.empty()
+            st.success("Generation Complete!")
+            st.markdown(response.text)
+        except Exception as e:
+            generating.empty()
+            st.error(f"Failed to generate listing: {e}")
+
 # ----------------------------------------------------------------------------
 # Sidebar Control & Paywall
 # ----------------------------------------------------------------------------
@@ -279,8 +326,17 @@ with tab1:
     
     if not active_inv.empty:
         st.markdown("---")
-        if st.button("💰 Record a Sale"):
-            mark_sold_dialog(user_id, active_inv)
+        colSale, colAI = st.columns(2)
+        with colSale:
+            if st.button("💰 Record a Sale", use_container_width=True):
+                mark_sold_dialog(user_id, active_inv)
+        with colAI:
+            if user_tier == 'Pro':
+                if st.button("✨ Auto-Generate AI Listing", use_container_width=True):
+                    ai_listing_dialog(active_inv)
+            else:
+                st.button("✨ Auto-Generate AI Listing (Pro Only)", use_container_width=True, disabled=True)
+                st.caption("Upgrade to Pro to unlock 1-click SEO listing generation for eBay & Poshmark.")
     else:
         st.info("Your active inventory is empty. Add your first item using the sidebar on the left!")
 
